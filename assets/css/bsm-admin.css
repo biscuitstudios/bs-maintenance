@@ -1,0 +1,296 @@
+/**
+ * Maintenance — admin styles.
+ * WP-admin-native card UI per docs/PLUGIN_PRIMER.md.
+ */
+
+.bsm-wrap {
+    /* Colors */
+    --bsm-bg:           #f0f0f1;
+    --bsm-card-bg:      #fff;
+    --bsm-text:         #1e1e1e;
+    --bsm-text-body:    #3c434a;
+    --bsm-text-muted:   #757575;
+    --bsm-border:       #e2e4e7;
+    --bsm-accent:       #2271b1;
+    --bsm-success:      #1e8a3e;
+    --bsm-error:        #d63638;
+    --bsm-warning:      #b26200;
+
+    /* Card surface */
+    --bsm-card-radius:  4px;
+    --bsm-card-shadow:  0 0 0 1px rgba(0, 0, 0, 0.1);
+    --bsm-card-pad:     24px;
+    --bsm-card-hdr-pad: 16px 24px;
+    --bsm-card-gap:     24px;
+
+    /* Form controls */
+    --bsm-input-height: 44px;
+    --bsm-input-pad:    0 12px;
+    --bsm-input-radius: 4px;
+    --bsm-input-border: 1px solid #c3c4c7;
+
+    max-width: 840px;
+    margin-right: 20px;
+    color: var(--bsm-text-body);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* Header ------------------------------------------------------------------ */
+
+.bsm-header {
+    position: sticky;
+    top: 32px;
+    z-index: 100;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 24px;
+    background: var(--bsm-card-bg);
+    box-shadow: var(--bsm-card-shadow);
+    border-radius: var(--bsm-card-radius);
+    margin: 20px 0 var(--bsm-card-gap);
+}
+@media (max-width: 782px) {
+    .bsm-header { top: 46px; }
+}
+.bsm-header h1 {
+    margin: 0;
+    padding: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--bsm-text);
+}
+.bsm-pill {
+    flex: none;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+}
+.bsm-pill.is-on  { background: #fcf0f1; color: var(--bsm-error);   box-shadow: inset 0 0 0 1px rgba(214, 54, 56, 0.25); }
+.bsm-pill.is-off { background: #edfaef; color: var(--bsm-success); box-shadow: inset 0 0 0 1px rgba(30, 138, 62, 0.25); }
+
+/* Notices ----------------------------------------------------------------- */
+
+.bsm-notice {
+    background: var(--bsm-card-bg);
+    box-shadow: var(--bsm-card-shadow);
+    border-left: 4px solid var(--bsm-accent);
+    border-radius: var(--bsm-card-radius);
+    padding: 12px 16px;
+    margin: 0 0 var(--bsm-card-gap);
+}
+.bsm-notice p { margin: 0; }
+.bsm-notice.is-success { border-left-color: var(--bsm-success); }
+.bsm-notice.is-error   { border-left-color: var(--bsm-error); }
+
+/* Cards ------------------------------------------------------------------- */
+
+.bsm-card {
+    background: var(--bsm-card-bg);
+    border: 0;
+    border-radius: var(--bsm-card-radius);
+    box-shadow: var(--bsm-card-shadow);
+    margin: 0 0 var(--bsm-card-gap);
+}
+.bsm-card-header {
+    padding: var(--bsm-card-hdr-pad);
+    background: transparent;
+    border-bottom: 1px solid var(--bsm-border);
+    border-radius: var(--bsm-card-radius) var(--bsm-card-radius) 0 0;
+}
+.bsm-card-header h2 {
+    margin: 0;
+    padding: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--bsm-text);
+}
+.bsm-card-body { padding: var(--bsm-card-pad); }
+
+/* Fields ------------------------------------------------------------------ */
+
+.bsm-field { margin: 0 0 24px; }
+.bsm-field:last-child { margin-bottom: 0; }
+
+/* :not(.bsm-toggle) matters — without it this rule outranks .bsm-toggle on
+   specificity (0,1,1 vs 0,1,0), forcing the toggle label to display:block and
+   collapsing the switch track to an inline element with no size. */
+.bsm-field > label:not(.bsm-toggle) {
+    display: block;
+    margin: 0 0 6px;
+    font-weight: 600;
+    color: var(--bsm-text);
+}
+
+.bsm-field input[type="text"],
+.bsm-field input[type="url"],
+.bsm-field select:not([multiple]) {
+    box-sizing: border-box;
+    width: 100%;
+    /* height, not min-height — native chrome pushes min-height inputs past 44px */
+    height: var(--bsm-input-height);
+    padding: var(--bsm-input-pad);
+    border: var(--bsm-input-border);
+    border-radius: var(--bsm-input-radius);
+    background: #fff;
+    color: var(--bsm-text);
+    font-size: 13px;
+    line-height: 1.4;
+    margin: 0;
+}
+.bsm-field select:not([multiple]) { max-width: 100%; }
+
+/* Code entry (custom HTML / CSS) — height, not the 44px control height. */
+.bsm-field textarea.bsm-code {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    padding: 10px 12px;
+    border: var(--bsm-input-border);
+    border-radius: var(--bsm-input-radius);
+    background: #fff;
+    color: var(--bsm-text);
+    font-family: Menlo, Consolas, monaco, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    resize: vertical;
+    margin: 0;
+    /* Tabs in pasted markup otherwise render eight columns wide. */
+    tab-size: 4;
+}
+.bsm-field textarea.bsm-code:focus {
+    border-color: var(--bsm-accent);
+    box-shadow: 0 0 0 1px var(--bsm-accent);
+    outline: 2px solid transparent;
+}
+
+.bsm-help {
+    margin: 8px 0 0;
+    color: var(--bsm-text-muted);
+    font-size: 13px;
+    line-height: 1.5;
+}
+.bsm-help strong { color: var(--bsm-text-body); }
+
+/* Input group (prefix + field + buttons) ---------------------------------- */
+
+.bsm-input-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.bsm-input-group .bsm-input-prefix {
+    color: var(--bsm-text-muted);
+    font-family: Menlo, Consolas, monaco, monospace;
+    font-size: 12px;
+    white-space: nowrap;
+}
+.bsm-input-group input[type="text"] {
+    flex: 1 1 200px;
+    width: auto;
+}
+.bsm-input-group .button {
+    height: var(--bsm-input-height);
+    flex: none;
+}
+
+/* Read-only full URL — visible so it can be selected by hand when the
+   Clipboard API is unavailable, and so the shareable link is never a mystery. */
+.bsm-field input[type="text"].bsm-secret-preview {
+    margin-top: 8px;
+    background: #f6f7f7;
+    color: var(--bsm-text-muted);
+    font-family: Menlo, Consolas, monaco, monospace;
+    font-size: 12px;
+}
+.bsm-secret-preview[hidden] { display: none; }
+
+/* Toggle ------------------------------------------------------------------ */
+
+.bsm-field > label.bsm-toggle,
+.bsm-toggle {
+    position: relative;   /* contain the absolutely-positioned checkbox */
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    cursor: pointer;
+    user-select: none;
+}
+/* Visually hidden but still focusable and still announced by screen readers. */
+.bsm-toggle input[type="checkbox"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+.bsm-toggle-track {
+    flex: none;
+    display: inline-block;
+    position: relative;
+    width: 40px;
+    height: 22px;
+    border-radius: 999px;
+    background: #c3c4c7;
+    transition: background 0.15s ease-in-out;
+}
+.bsm-toggle-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.15s ease-in-out;
+}
+.bsm-toggle input:checked + .bsm-toggle-track { background: var(--bsm-accent); }
+.bsm-toggle input:checked + .bsm-toggle-track .bsm-toggle-thumb { transform: translateX(18px); }
+.bsm-toggle input:focus-visible + .bsm-toggle-track { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--bsm-accent); }
+.bsm-toggle-label { font-weight: 600; color: var(--bsm-text); }
+
+.bsm-field-toggle .bsm-help { margin-left: 50px; }
+
+/* Host check result ------------------------------------------------------- */
+
+.bsm-result {
+    margin: 12px 0 0;
+    padding: 12px 16px;
+    border-left: 4px solid var(--bsm-text-muted);
+    border-radius: var(--bsm-input-radius);
+    background: #f6f7f7;
+}
+.bsm-result.is-success { border-left-color: var(--bsm-success); }
+.bsm-result.is-error   { border-left-color: var(--bsm-error); }
+
+.bsm-result p {
+    margin: 0 0 8px;
+    color: var(--bsm-text-body);
+    font-size: 13px;
+    line-height: 1.5;
+}
+.bsm-result p:last-child { margin-bottom: 0; }
+
+.bsm-result-verdict { font-weight: 600; color: var(--bsm-text); }
+.bsm-result.is-error .bsm-result-verdict   { color: var(--bsm-error); }
+.bsm-result.is-success .bsm-result-verdict { color: var(--bsm-success); }
+
+.bsm-result-meta { color: var(--bsm-text-muted); font-size: 12px; }
+
+/* Dependent blocks -------------------------------------------------------- */
+
+.bsm-dependent[hidden] { display: none; }
+
+/* Actions ----------------------------------------------------------------- */
+
+.bsm-actions { margin: 0 0 40px; }
+.bsm-actions .button-large { height: var(--bsm-input-height); padding: 0 24px; }
