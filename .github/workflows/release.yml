@@ -35,6 +35,38 @@ jobs:
             exit 1
           fi
 
+      # Nothing else ties the TAG to the shipped version. build.sh checks the
+      # plugin header against the *_VERSION constant and names the zip from the
+      # header, so a v9.9.9 tag on an unbumped header would publish a Release
+      # called v9.9.9 containing a zip of the OLD version. WordPress reads the
+      # header for update checks, so every site would be offered the old version
+      # and nothing would have errored anywhere.
+      #
+      # The main file is detected rather than named, the same way bin/build.sh
+      # does it, so this block is identical across all four plugins. One of them
+      # has a main file whose name does not match its slug, which a hardcoded
+      # filename would have got wrong.
+      - name: Check the tag matches the plugin header version
+        run: |
+          MAIN="$(grep -lE '^[[:space:]]*\* Plugin Name:' ./*.php | head -1)"
+          if [ -z "$MAIN" ]; then
+            echo "Could not find a plugin main file (no *.php carrying a Plugin Name header)." >&2
+            exit 1
+          fi
+          HEADER="$(grep -m1 -E '^[[:space:]]*\*[[:space:]]*Version:' "$MAIN" \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ -z "$HEADER" ]; then
+            echo "Could not read a Version header out of $MAIN." >&2
+            exit 1
+          fi
+          if [ "$HEADER" != "$TAG" ]; then
+            echo "Tag is '$GITHUB_REF_NAME', so version '$TAG', but $MAIN says '$HEADER'." >&2
+            echo "Bump the header and the VERSION constant to match the tag, or delete the tag and retag." >&2
+            exit 1
+          fi
+          echo "Tag $GITHUB_REF_NAME matches $MAIN ($HEADER)."
+
       - name: Build the plugin zip
         run: bash bin/build.sh "$RUNNER_TEMP"
 
