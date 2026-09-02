@@ -3,7 +3,7 @@
  * Plugin Name:       Maintenance
  * Plugin URI:        https://github.com/biscuitstudios/bs-maintenance
  * Description:       Hides the site behind a WordPress page you choose, or a standalone HTML page. Maintenance (503) or Coming Soon (200), logged-in bypass, secret access link, and a custom page for WordPress's own update screen.
- * Version:           0.2.0
+ * Version:           0.3.0
  * Requires at least: 6.3
  * Requires PHP:      8.2
  * Author:            Biscuit Studios
@@ -16,7 +16,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'BSM_VERSION',  '0.2.0' );
+define( 'BSM_VERSION',  '0.3.0' );
 define( 'BSM_FILE',     __FILE__ );
 define( 'BSM_DIR',      plugin_dir_path( __FILE__ ) );
 define( 'BSM_URL',      plugin_dir_url( __FILE__ ) );
