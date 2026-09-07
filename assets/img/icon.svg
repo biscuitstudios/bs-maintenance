@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="BS Maintenance">
+	<title>BS Maintenance</title>
+	<!--
+		Tabler Icons "device-imac", MIT licensed (https://tabler.io/icons).
+		Drawn on a 24x24 grid, scaled 7x and centred on a 256 canvas, which
+		keeps the original stroke weight ratio (2/24 of the glyph box).
+
+		The source icon uses stroke="currentColor". That is no use here: core
+		renders a plugin icon as <img src="...">, so the SVG is its own
+		document with nothing to inherit a colour from, and currentColor would
+		fall back to black. The stroke is set explicitly instead.
+
+		The tile and the glyph transform are identical across all four Biscuit
+		plugins, so the icons read as one set in the plugins list.
+	-->
+	<rect width="256" height="256" rx="56" fill="#ebebeb" />
+	<g transform="translate(44 44) scale(7)"
+	   fill="none"
+	   stroke="#000000"
+	   stroke-width="2"
+	   stroke-linecap="round"
+	   stroke-linejoin="round">
+		<path d="M3 4a1 1 0 0 1 1 -1h16a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1v-12" />
+		<path d="M3 13h18" />
+		<path d="M8 21h8" />
+		<path d="M10 17l-.5 4" />
+		<path d="M14 17l.5 4" />
+	</g>
+</svg>
