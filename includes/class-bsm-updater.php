@@ -303,6 +303,11 @@ class Bsm_Updater {
         return $fallback;
     }
 
+    /**
+     * Turns a release body into the markup the details modal shows.
+     *
+     * @param array $release
+     */
     private function render_changelog( $release ) {
         $body = trim( $release['changelog'] );
         $out  = '';
@@ -310,19 +315,187 @@ class Bsm_Updater {
         if ( '' === $body ) {
             $out .= '<p>' . esc_html__( 'No release notes were published for this version.', 'bs-maintenance' ) . '</p>';
         } else {
-            // Release notes are Markdown. Shipping a parser to render one modal
-            // is not worth it, so they are escaped and shown as written.
-            $out .= '<pre style="white-space:pre-wrap;font-family:inherit;">' . esc_html( $body ) . '</pre>';
+            $out .= self::render_markdown( $body );
         }
 
         if ( '' !== $release['url'] ) {
+            // No target or rel here on purpose. Core passes every section
+            // through links_add_target(), which adds the target itself, and
+            // then through wp_kses(), which strips rel either way.
             $out .= sprintf(
-                '<p><a href="%s" target="_blank" rel="noopener">%s</a></p>',
+                '<p><a href="%s">%s</a></p>',
                 esc_url( $release['url'] ),
                 esc_html__( 'View this release on GitHub', 'bs-maintenance' )
             );
         }
 
         return $out;
+    }
+
+    /**
+     * Renders the subset of Markdown the release notes actually use.
+     *
+     * Release bodies are built from this plugin's own readme.txt changelog by
+     * .github/workflows/release.yml, so the vocabulary is small and known:
+     * `*` bullets with indented continuation lines, `**bold**`, backtick code
+     * spans, links, and the "What's Changed" heading GitHub appends
+     * underneath. Shipping a Markdown library to 62 client sites to format one
+     * modal is not a trade worth making.
+     *
+     * This replaced a `<pre style="white-space:pre-wrap">` that never wrapped.
+     * Core filters every section through wp_kses() against a fixed allowlist
+     * ($plugins_allowedtags in wp-admin/includes/plugin-install.php) which
+     * permits <pre> but none of its attributes, so that style was always being
+     * stripped and long lines always overflowed. Everything below stays on
+     * that list and sets no attribute other than href.
+     */
+    public static function render_markdown( $markdown ) {
+        $lines = preg_split( '/\R/', (string) $markdown );
+
+        if ( false === $lines ) {
+            return '';
+        }
+
+        $html  = '';
+        $para  = [];
+        $items = [];
+        $open  = false; // Whether a bullet is still open to continuation lines.
+
+        foreach ( $lines as $line ) {
+            $trimmed = trim( $line );
+
+            // A blank line ends a paragraph and stops a bullet taking any more
+            // continuation lines. It deliberately does NOT close the list:
+            // readme.txt and GitHub both allow a blank line between items.
+            if ( '' === $trimmed ) {
+                $html .= self::close_paragraph( $para );
+                $open  = false;
+                continue;
+            }
+
+            if ( preg_match( '/^#{1,6}\s+(.*)$/', $trimmed, $m ) ) {
+                $html .= self::close_paragraph( $para );
+                $html .= self::close_list( $items );
+                $html .= '<h4>' . self::inline( $m[1] ) . '</h4>';
+                $open  = false;
+                continue;
+            }
+
+            if ( preg_match( '/^[*-]\s+(.*)$/', $trimmed, $m ) ) {
+                $html   .= self::close_paragraph( $para );
+                $items[] = $m[1];
+                $open    = true;
+                continue;
+            }
+
+            // An indented line under a bullet belongs to that bullet. The
+            // changelog wraps at 78 columns, so most entries run to three or
+            // four lines and would otherwise break into separate paragraphs
+            // mid-sentence.
+            if ( $open && 1 === preg_match( '/^\s/', $line ) ) {
+                $items[ count( $items ) - 1 ] .= ' ' . $trimmed;
+                continue;
+            }
+
+            $html  .= self::close_list( $items );
+            $open   = false;
+            $para[] = $trimmed;
+        }
+
+        $html .= self::close_paragraph( $para );
+        $html .= self::close_list( $items );
+
+        return $html;
+    }
+
+    /**
+     * @param array $para Paragraph lines. Emptied by this call.
+     */
+    private static function close_paragraph( &$para ) {
+        if ( [] === $para ) {
+            return '';
+        }
+
+        $text = self::inline( implode( ' ', $para ) );
+        $para = [];
+
+        return '<p>' . $text . '</p>';
+    }
+
+    /**
+     * @param array $items List items. Emptied by this call.
+     */
+    private static function close_list( &$items ) {
+        if ( [] === $items ) {
+            return '';
+        }
+
+        $out = '<ul>';
+
+        foreach ( $items as $item ) {
+            $out .= '<li>' . self::inline( $item ) . '</li>';
+        }
+
+        $items = [];
+
+        return $out . '</ul>';
+    }
+
+    /**
+     * Escapes a run of text, then adds inline formatting to it.
+     *
+     * Escaping comes first and every tag is added after it, so nothing written
+     * in a release body can introduce markup of its own. The other order would
+     * have esc_html() eat the tags this adds.
+     */
+    private static function inline( $text ) {
+        $text = esc_html( $text );
+
+        // Code spans before bold. A code span can contain asterisks, and bold
+        // run first would chew straight through them.
+        $text = (string) preg_replace( '/`([^`]+)`/', '<code>$1</code>', $text );
+        $text = (string) preg_replace( '/\*\*([^*]+)\*\*/', '<strong>$1</strong>', $text );
+
+        // One pass for both link forms. Nothing above has produced an <a>, so
+        // the bare-URL branch cannot match a URL that is already an href.
+        return (string) preg_replace_callback(
+            '/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<]+)/',
+            static function ( $m ) {
+                if ( ! isset( $m[3] ) || '' === $m[3] ) {
+                    return self::link( $m[2], $m[1] );
+                }
+
+                // A bare URL. Trailing sentence punctuation is not part of it:
+                // "see https://example.com/x." must not link the full stop.
+                $url  = $m[3];
+                $tail = '';
+
+                if ( preg_match( '/[.,;:!?)\]]+$/', $url, $p ) ) {
+                    $tail = $p[0];
+                    $url  = substr( $url, 0, -strlen( $tail ) );
+                }
+
+                return self::link( $url, $url ) . $tail;
+            },
+            $text
+        );
+    }
+
+    /**
+     * Builds one link from an already-escaped URL and label.
+     *
+     * The URL arrives HTML-escaped, so an ampersand reads as `&amp;`. esc_url()
+     * would take that literally and encode it a second time, hence the decode.
+     * A URL esc_url() rejects outright is shown as plain text rather than
+     * dropped, so nothing silently disappears from the notes.
+     */
+    private static function link( $url, $label ) {
+        $href = esc_url( html_entity_decode( $url, ENT_QUOTES, 'UTF-8' ) );
+
+        if ( '' === $href ) {
+            return $label;
+        }
+
+        return '<a href="' . $href . '">' . $label . '</a>';
     }
 }
