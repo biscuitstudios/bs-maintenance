@@ -16,7 +16,15 @@ class Bsm_Updater {
 
     const REPO = 'biscuitstudios/bs-maintenance';
 
-    const CACHE_KEY = 'bsm_updater_release';
+    const CACHE_KEY = 'bsm_updater_release_v2';
+
+    /**
+     * How many releases the changelog lists.
+     *
+     * One more than this is requested, so "is there more history than this"
+     * can be answered without a second call.
+     */
+    const MAX_RELEASES = 10;
 
     /**
      * GitHub allows 60 unauthenticated API calls an hour per IP, and client
@@ -175,10 +183,15 @@ class Bsm_Updater {
     }
 
     /**
-     * Returns the latest release as an array, or null when it cannot be
-     * established.
+     * Returns the latest release and the recent changelog, or null when it
+     * cannot be established.
+     *
+     * @return array|null
      */
     private function get_release() {
+        // The cache key carries a version because the shape of what is stored
+        // changed when the changelog became a list. An old entry under the old
+        // key is simply never read again and expires on its own.
         $cached = get_site_transient( self::CACHE_KEY );
 
         // A failed lookup is cached as a scalar sentinel so it is telling apart
@@ -204,9 +217,16 @@ class Bsm_Updater {
         return $release;
     }
 
+    /**
+     * @return array|null
+     */
     private function fetch_release() {
+        // One call, not two. The list endpoint answers both questions this
+        // class has, which release to offer and what the recent ones say, so
+        // asking releases/latest as well would double the cost against the
+        // 60-an-hour unauthenticated limit and buy nothing.
         $response = wp_remote_get(
-            'https://api.github.com/repos/' . self::REPO . '/releases/latest',
+            'https://api.github.com/repos/' . self::REPO . '/releases?per_page=' . ( self::MAX_RELEASES + 1 ),
             [
                 'timeout' => 10,
                 'headers' => [
@@ -234,38 +254,72 @@ class Bsm_Updater {
 
         $body = json_decode( wp_remote_retrieve_body( $response ), true );
 
-        if ( ! is_array( $body ) || empty( $body['tag_name'] ) ) {
-            error_log( '[BSM] Update check failed: no tag_name in the response for ' . self::REPO );
+        if ( ! is_array( $body ) || [] === $body ) {
+            error_log( '[BSM] Update check failed: no releases listed for ' . self::REPO );
 
             return null;
         }
 
-        $version = ltrim( (string) $body['tag_name'], 'vV' );
+        $log = [];
 
-        if ( ! preg_match( '/^\d+\.\d+\.\d+/', $version ) ) {
-            error_log( '[BSM] Update check failed: unusable tag "' . $body['tag_name'] . '"' );
+        foreach ( $body as $entry ) {
+            if ( ! is_array( $entry ) || ! empty( $entry['draft'] ) || ! empty( $entry['prerelease'] ) ) {
+                continue;
+            }
+
+            $version = ltrim( (string) ( $entry['tag_name'] ?? '' ), 'vV' );
+
+            if ( ! preg_match( '/^\d+\.\d+\.\d+/', $version ) ) {
+                continue;
+            }
+
+            $log[] = [
+                'version'   => $version,
+                'published' => (string) ( $entry['published_at'] ?? '' ),
+                'notes'     => self::strip_compare_link( (string) ( $entry['body'] ?? '' ) ),
+                'url'       => (string) ( $entry['html_url'] ?? '' ),
+                'assets'    => is_array( $entry['assets'] ?? null ) ? $entry['assets'] : [],
+            ];
+        }
+
+        if ( [] === $log ) {
+            error_log( '[BSM] Update check failed: no usable release tags for ' . self::REPO );
 
             return null;
         }
 
-        $assets  = ( isset( $body['assets'] ) && is_array( $body['assets'] ) ) ? $body['assets'] : [];
-        $package = $this->find_zip_asset( $assets, $version );
+        // GitHub lists newest first, and dropping drafts and prereleases is
+        // exactly what releases/latest does, so the first survivor is the
+        // release that endpoint would have named. Checked against both
+        // endpoints on all three plugin repos before this replaced it.
+        $latest  = $log[0];
+        $package = $this->find_zip_asset( $latest['assets'], $latest['version'] );
 
         // A release with no built zip attached is not installable. GitHub's own
         // "Source code (zip)" is not an asset, which is the outcome we want:
         // that archive is the repo, not the built plugin.
         if ( '' === $package ) {
-            error_log( '[BSM] Update check failed: release ' . $body['tag_name'] . ' has no zip asset.' );
+            error_log( '[BSM] Update check failed: release v' . $latest['version'] . ' has no zip asset.' );
 
             return null;
         }
 
+        // Say so rather than letting a capped list read as the whole history.
+        $truncated = count( $log ) > self::MAX_RELEASES;
+        $log       = array_slice( $log, 0, self::MAX_RELEASES );
+
+        foreach ( array_keys( $log ) as $i ) {
+            unset( $log[ $i ]['assets'] );
+        }
+
         return [
-            'version'   => $version,
-            'package'   => $package,
-            'url'       => isset( $body['html_url'] ) ? (string) $body['html_url'] : '',
-            'changelog' => isset( $body['body'] ) ? (string) $body['body'] : '',
-            'published' => isset( $body['published_at'] ) ? (string) $body['published_at'] : '',
+            'version'      => $latest['version'],
+            'package'      => $package,
+            'url'          => $latest['url'],
+            'published'    => $latest['published'],
+            'log'          => $log,
+            'truncated'    => $truncated,
+            'releases_url' => 'https://github.com/' . self::REPO . '/releases',
         ];
     }
 
@@ -304,32 +358,143 @@ class Bsm_Updater {
     }
 
     /**
-     * Turns a release body into the markup the details modal shows.
+     * Builds the changelog the details modal shows: every recent release,
+     * newest first, under a version and date heading.
      *
      * @param array $release
      */
     private function render_changelog( $release ) {
-        $body = trim( $release['changelog'] );
-        $out  = '';
+        $shipped = $this->readme_changelog();
+        $out     = '';
 
-        if ( '' === $body ) {
-            $out .= '<p>' . esc_html__( 'No release notes were published for this version.', 'bs-maintenance' ) . '</p>';
-        } else {
-            $out .= self::render_markdown( $body );
+        foreach ( $release['log'] as $entry ) {
+            $notes = trim( $entry['notes'] );
+
+            // Everything tagged before the release body carried the changelog
+            // has nothing in it but the compare link, which is stripped above.
+            // This copy of the plugin ships the whole history in readme.txt,
+            // and reading it costs no HTTP call, so it fills those in rather
+            // than printing ten "no release notes" lines.
+            if ( '' === $notes ) {
+                $notes = $shipped[ $entry['version'] ] ?? '';
+            }
+
+            // h3 for the version, while a heading inside a release body stays
+            // h4. Older releases carry GitHub's generated notes, which have
+            // their own "What's Changed" heading, and at one level they read
+            // as another version rather than as part of one.
+            $out .= '<h3>' . esc_html( self::heading( $entry ) ) . '</h3>';
+
+            $out .= '' === $notes
+                ? '<p>' . esc_html__( 'No release notes were published for this version.', 'bs-maintenance' ) . '</p>'
+                : self::render_markdown( $notes );
         }
 
-        if ( '' !== $release['url'] ) {
-            // No target or rel here on purpose. Core passes every section
-            // through links_add_target(), which adds the target itself, and
-            // then through wp_kses(), which strips rel either way.
-            $out .= sprintf(
-                '<p><a href="%s">%s</a></p>',
-                esc_url( $release['url'] ),
-                esc_html__( 'View this release on GitHub', 'bs-maintenance' )
-            );
-        }
+        // No target or rel here on purpose. Core passes every section through
+        // links_add_target(), which adds the target itself, and then through
+        // wp_kses(), which strips rel either way.
+        $out .= sprintf(
+            '<p><a href="%s">%s</a></p>',
+            esc_url( $release['releases_url'] ),
+            $release['truncated']
+                ? esc_html__( 'Earlier releases are on GitHub', 'bs-maintenance' )
+                : esc_html__( 'View all releases on GitHub', 'bs-maintenance' )
+        );
 
         return $out;
+    }
+
+    /**
+     * "0.17.0 | September 14, 2026", or just the version when GitHub gave no
+     * publication date.
+     *
+     * @param array $entry
+     */
+    private static function heading( $entry ) {
+        $date = self::format_date( $entry['published'] );
+
+        return '' === $date ? $entry['version'] : $entry['version'] . ' | ' . $date;
+    }
+
+    /**
+     * Formats a release timestamp for a heading.
+     *
+     * Fixed as "September 14, 2026" rather than the site's own date_format.
+     * These dates are read as a column down the side of a list, and a site set
+     * to a numeric format makes that harder to scan, not easier.
+     */
+    private static function format_date( $published ) {
+        if ( '' === $published ) {
+            return '';
+        }
+
+        $time = strtotime( $published );
+
+        return false === $time ? '' : (string) wp_date( 'F j, Y', $time );
+    }
+
+    /**
+     * Removes the compare link GitHub appends to a generated release body.
+     *
+     * It earns its place on the release page and is noise here, where ten
+     * versions stack up and each would carry one. Only a trailing one goes, so
+     * a link written into the changelog itself survives.
+     */
+    private static function strip_compare_link( $notes ) {
+        return (string) preg_replace( '/\s*\*\*Full Changelog\*\*:\s*\S+\s*$/', '', $notes );
+    }
+
+    /**
+     * The changelog sections shipped inside this copy of the plugin, keyed by
+     * version.
+     *
+     * @return array
+     */
+    private function readme_changelog() {
+        $readme = dirname( $this->file ) . '/readme.txt';
+
+        if ( ! is_readable( $readme ) ) {
+            return [];
+        }
+
+        $lines = preg_split( '/\R/', (string) file_get_contents( $readme ) );
+
+        if ( false === $lines ) {
+            return [];
+        }
+
+        $sections = [];
+        $in_log   = false;
+        $current  = '';
+
+        foreach ( $lines as $line ) {
+            // A "== Heading ==" line opens the changelog or closes it. Reading
+            // version headings outside it is not merely untidy: an
+            // "== Upgrade Notice ==" section repeats the same "= 1.0.0 ="
+            // headings, and those would overwrite the real entry for that
+            // version with the upgrade note.
+            if ( preg_match( '/^==\s*(.+?)\s*==\s*$/', $line, $m ) ) {
+                $in_log  = 0 === strcasecmp( trim( $m[1] ), 'changelog' );
+                $current = '';
+                continue;
+            }
+
+            if ( ! $in_log ) {
+                continue;
+            }
+
+            if ( preg_match( '/^=\s*([0-9]+\.[0-9]+\.[0-9]+)\s*=\s*$/', $line, $m ) ) {
+                $current              = $m[1];
+                $sections[ $current ] = '';
+                continue;
+            }
+
+            if ( '' !== $current ) {
+                $sections[ $current ] .= $line . "\n";
+            }
+        }
+
+        return array_map( 'trim', $sections );
     }
 
     /**

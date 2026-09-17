@@ -37,6 +37,7 @@ jobs:
           php tests/test-dropin.php
           php tests/test-modes.php
           php tests/test-changelog.php
+          php tests/test-changelog-history.php
 
   standards:
     name: Coding standards
