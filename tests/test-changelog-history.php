@@ -83,7 +83,8 @@ function api_release( string $tag, string $published, string $body = '* A thing'
             'assets'       => array(
                 array(
                     'name'                 => 'bs-maintenance-v' . ltrim( $tag, 'v' ) . '.zip',
-                    'browser_download_url' => 'https://example.test/' . $tag . '.zip',
+                    'browser_download_url' => 'https://github.com/biscuitstudios/bs-maintenance/releases/download/'
+                    	. $tag . '/bs-maintenance-v' . ltrim( $tag, 'v' ) . '.zip',
                 ),
             ),
         ),
@@ -111,7 +112,7 @@ $r = fetch( array(
     api_release( 'v0.5.0', '2026-09-07T10:00:00Z' ),
 ) );
 it( 'the newest release is offered', '0.6.0' === $r['version'], $r['version'] ?? 'null' );
-it( 'its built zip is the package', 'https://example.test/v0.6.0.zip' === $r['package'] );
+it( 'its built zip is the package', 'https://github.com/biscuitstudios/bs-maintenance/releases/download/v0.6.0/bs-maintenance-v0.6.0.zip' === $r['package'] );
 
 // This is what releases/latest did for us, and moving to the list endpoint
 // moved the job here. Getting it wrong offers every site something never meant
